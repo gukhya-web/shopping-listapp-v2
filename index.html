@@ -155,8 +155,12 @@
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
-  const STORAGE_KEY = 'shopping-list-items';
+  const SUPABASE_URL = 'https://nrrprmqfqvjyvimuhtcj.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ycnBybXFmcXZqeXZpbXVodGNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk1ODExOTIsImV4cCI6MjEwNTE1NzE5Mn0.6ByN-wDtLYT_5Yteql9ZoVajGKbm_ltgjZs4rvpNpLU';
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   const input = document.getElementById('item-input');
   const addBtn = document.getElementById('add-btn');
   const list = document.getElementById('list');
@@ -164,24 +168,22 @@
   const countMsg = document.getElementById('count-msg');
   const clearCheckedBtn = document.getElementById('clear-checked');
 
-  function loadItems() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
+  let items = [];
+
+  async function fetchItems() {
+    const { data, error } = await db
+      .from('shopping_items')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) {
+      console.error(error);
       return [];
     }
+    return data;
   }
 
-  function saveItems(items) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (e) {}
-  }
-
-  let items = loadItems();
-
-  function render() {
+  async function render() {
+    items = await fetchItems();
     list.innerHTML = '';
     items.forEach(item => {
       const li = document.createElement('li');
@@ -190,9 +192,8 @@
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.checked = item.checked;
-      checkbox.addEventListener('change', () => {
-        item.checked = checkbox.checked;
-        saveItems(items);
+      checkbox.addEventListener('change', async () => {
+        await db.from('shopping_items').update({ checked: checkbox.checked }).eq('id', item.id);
         render();
       });
 
@@ -203,9 +204,8 @@
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'delete';
       deleteBtn.textContent = '✕';
-      deleteBtn.addEventListener('click', () => {
-        items = items.filter(i => i.id !== item.id);
-        saveItems(items);
+      deleteBtn.addEventListener('click', async () => {
+        await db.from('shopping_items').delete().eq('id', item.id);
         render();
       });
 
@@ -222,13 +222,12 @@
       : '';
   }
 
-  function addItem() {
+  async function addItem() {
     const text = input.value.trim();
     if (!text) return;
-    items.push({ id: Date.now() + Math.random(), text, checked: false });
-    saveItems(items);
+    await db.from('shopping_items').insert({ text, checked: false });
     input.value = '';
-    render();
+    await render();
     input.focus();
   }
 
@@ -236,9 +235,8 @@
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') addItem();
   });
-  clearCheckedBtn.addEventListener('click', () => {
-    items = items.filter(i => !i.checked);
-    saveItems(items);
+  clearCheckedBtn.addEventListener('click', async () => {
+    await db.from('shopping_items').delete().eq('checked', true);
     render();
   });
 
